@@ -1,6 +1,11 @@
 import validatorConfig from '../../prompts/answer-validator.json';
 import { GeneratedProblem, ValidationResult } from '../../src/types/problem';
-import { callOpenCodeGo, evaluateAnswerFallback, extractJsonFromLlmText } from './_shared';
+import {
+  callOpenCodeGo,
+  evaluateAnswerFallback,
+  extractJsonFromLlmText,
+  verifyFamilyAccessCode,
+} from './_shared';
 
 export interface ValidateAnswerRequest {
   problem: GeneratedProblem;
@@ -60,6 +65,14 @@ export default async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const authCheck = verifyFamilyAccessCode(req.headers.get('x-family-code'));
+  if (!authCheck.authorized) {
+    return new Response(JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }), {
+      status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
   }

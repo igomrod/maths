@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { handleGenerateProblem } from './netlify/functions/generate-problem';
 import { handleValidateAnswer } from './netlify/functions/validate-answer';
+import { verifyFamilyAccessCode } from './netlify/functions/_shared';
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -27,6 +28,14 @@ function localApiMiddleware(): Plugin {
         (req.url === '/api/generate-problem' || req.url === '/.netlify/functions/generate-problem') &&
         req.method === 'POST'
       ) {
+        const familyHeader = req.headers['x-family-code'];
+        const authCheck = verifyFamilyAccessCode(Array.isArray(familyHeader) ? familyHeader[0] : familyHeader);
+        if (!authCheck.authorized) {
+          res.statusCode = 401;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }));
+          return;
+        }
         try {
           const raw = await readBody(req);
           const body = raw ? JSON.parse(raw) : {};
@@ -46,6 +55,14 @@ function localApiMiddleware(): Plugin {
         (req.url === '/api/validate-answer' || req.url === '/.netlify/functions/validate-answer') &&
         req.method === 'POST'
       ) {
+        const familyHeader = req.headers['x-family-code'];
+        const authCheck = verifyFamilyAccessCode(Array.isArray(familyHeader) ? familyHeader[0] : familyHeader);
+        if (!authCheck.authorized) {
+          res.statusCode = 401;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }));
+          return;
+        }
         try {
           const raw = await readBody(req);
           const body = raw ? JSON.parse(raw) : {};

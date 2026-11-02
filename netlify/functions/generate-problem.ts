@@ -5,6 +5,7 @@ import {
   extractJsonFromLlmText,
   getDeterministicProblem,
   OPERATION_LABELS_ES,
+  verifyFamilyAccessCode,
 } from './_shared';
 
 export interface GenerateProblemRequest {
@@ -59,6 +60,14 @@ export default async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const authCheck = verifyFamilyAccessCode(req.headers.get('x-family-code'));
+  if (!authCheck.authorized) {
+    return new Response(JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }), {
+      status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
   }

@@ -4,14 +4,17 @@ import { GeneratedProblem, OperationType, StoredProblem, ValidationResult } from
 import {
   addGeneratedProblem,
   deletePendingProblem,
+  getSavedAccessCode,
   loadStoredProblems,
   recordProblemAttempt,
+  saveAccessCode,
 } from './services/storage';
 import { OperationPicker } from './components/OperationPicker';
 import { ProblemCard } from './components/ProblemCard';
 import { AnswerBox } from './components/AnswerBox';
 import { ProblemHistory } from './components/ProblemHistory';
-import { Star, Trophy, Sparkles } from 'lucide-react';
+import { FamilyCodeModal } from './components/FamilyCodeModal';
+import { Star, Trophy, Sparkles, KeyRound } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [selectedOperation, setSelectedOperation] = useState<OperationType>('addition');
@@ -23,6 +26,9 @@ export const App: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [familyCode, setFamilyCode] = useState<string>(() => getSavedAccessCode());
+  const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  const [codeErrorMessage, setCodeErrorMessage] = useState<string | null>(null);
 
   const activeProblem = problems.find((p) => p.id === activeProblemId) || problems[0] || null;
   const totalSolved = problems.filter((p) => p.status === 'solved').length;
@@ -33,6 +39,14 @@ export const App: React.FC = () => {
     }
   }, [problems, activeProblemId]);
 
+  const handleSaveFamilyCode = (newCode: string) => {
+    saveAccessCode(newCode);
+    setFamilyCode(newCode);
+    setCodeErrorMessage(null);
+    setIsCodeModalOpen(false);
+    setErrorBanner(null);
+  };
+
   const handleGenerateProblem = useCallback(async () => {
     setIsGenerating(true);
     setErrorBanner(null);
@@ -41,13 +55,25 @@ export const App: React.FC = () => {
       const recentThemes = problems.slice(0, 8).map((p) => p.problem.title);
       const response = await fetch('/api/generate-problem', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-family-code': getSavedAccessCode(),
+        },
         body: JSON.stringify({
           operations: [selectedOperation],
           difficulty: '4.º de Primaria (9 años)',
           recentThemes,
         }),
       });
+
+      if (response.status === 401) {
+        const errData = (await response.json().catch(() => ({}))) as { error?: string };
+        setCodeErrorMessage(
+          errData.error || 'Introduce la Contraseña Mágica Familiar para continuar.'
+        );
+        setIsCodeModalOpen(true);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('No se pudo crear el problema en este momento.');
@@ -77,12 +103,24 @@ export const App: React.FC = () => {
     try {
       const response = await fetch('/api/validate-answer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-family-code': getSavedAccessCode(),
+        },
         body: JSON.stringify({
           problem: activeProblem.problem,
           userAnswer,
         }),
       });
+
+      if (response.status === 401) {
+        const errData = (await response.json().catch(() => ({}))) as { error?: string };
+        setCodeErrorMessage(
+          errData.error || 'Introduce la Contraseña Mágica Familiar para comprobar tu respuesta.'
+        );
+        setIsCodeModalOpen(true);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('No se pudo comprobar tu respuesta ahora mismo.');
@@ -126,6 +164,14 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
+      <FamilyCodeModal
+        isOpen={isCodeModalOpen}
+        initialCode={familyCode}
+        errorMessage={codeErrorMessage}
+        onSaveCode={handleSaveFamilyCode}
+        onClose={() => setIsCodeModalOpen(false)}
+      />
+
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Fun Kid-Friendly Header */}
         <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border-4 border-pink-300 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 px-6 py-4 text-white shadow-xl">
@@ -143,19 +189,35 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Stars / Solved Trophy Counter */}
-          <div
-            data-testid="solved-counter"
-            className="flex items-center gap-2.5 rounded-2xl border-2 border-amber-300 bg-amber-400/95 px-5 py-2.5 text-amber-950 shadow-md"
-          >
-            <Trophy className="h-6 w-6 text-amber-800" />
-            <div className="text-left">
-              <p className="text-xs font-extrabold uppercase tracking-wider text-amber-900">
-                Problemas Resueltos
-              </p>
-              <p className="font-display text-xl font-bold leading-none">
-                ⭐ {totalSolved} {totalSolved === 1 ? 'estrella' : 'estrellas'}
-              </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              data-testid="open-family-code-btn"
+              onClick={() => {
+                setCodeErrorMessage(null);
+                setIsCodeModalOpen(true);
+              }}
+              title="Configurar Contraseña Mágica Familiar"
+              className="flex items-center gap-1.5 rounded-2xl border-2 border-white/30 bg-white/15 px-3.5 py-2.5 text-xs font-extrabold text-white transition hover:bg-white/25"
+            >
+              <KeyRound className="h-4 w-4" />
+              <span>{familyCode ? 'Clave Guardada' : 'Clave Mágica'}</span>
+            </button>
+
+            {/* Stars / Solved Trophy Counter */}
+            <div
+              data-testid="solved-counter"
+              className="flex items-center gap-2.5 rounded-2xl border-2 border-amber-300 bg-amber-400/95 px-5 py-2.5 text-amber-950 shadow-md"
+            >
+              <Trophy className="h-6 w-6 text-amber-800" />
+              <div className="text-left">
+                <p className="text-xs font-extrabold uppercase tracking-wider text-amber-900">
+                  Problemas Resueltos
+                </p>
+                <p className="font-display text-xl font-bold leading-none">
+                  ⭐ {totalSolved} {totalSolved === 1 ? 'estrella' : 'estrellas'}
+                </p>
+              </div>
             </div>
           </div>
         </header>

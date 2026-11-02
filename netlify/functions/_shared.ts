@@ -2,6 +2,24 @@ import { GeneratedProblem, OperationType, ValidationResult } from '../../src/typ
 
 export const OPENCODE_GO_BASE_URL = 'https://opencode.ai/zen/go/v1/chat/completions';
 
+export function verifyFamilyAccessCode(providedCode?: string | null): {
+  authorized: boolean;
+  error?: string;
+} {
+  const expected = (process.env.FAMILY_ACCESS_CODE || '').trim();
+  // If FAMILY_ACCESS_CODE is not set in local dev / E2E tests, allow access
+  if (!expected) {
+    return { authorized: true };
+  }
+  if (!providedCode || providedCode.trim() !== expected) {
+    return {
+      authorized: false,
+      error: '🔑 Contraseña Mágica incorrecta o necesaria. Pídele la clave a papá.',
+    };
+  }
+  return { authorized: true };
+}
+
 export const OPERATION_LABELS_ES: Record<OperationType, string> = {
   addition: 'Suma (+)',
   subtraction: 'Resta (-)',

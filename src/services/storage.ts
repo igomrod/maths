@@ -1,6 +1,31 @@
 import { GeneratedProblem, OperationType, ProblemAttempt, StoredProblem, ValidationResult } from '../types/problem';
 
 const STORAGE_KEY = 'mates_magicas_problems_v1';
+const ACCESS_CODE_KEY = 'mates_magicas_access_code_v1';
+
+export function getSavedAccessCode(): string {
+  try {
+    return localStorage.getItem(ACCESS_CODE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveAccessCode(code: string): void {
+  try {
+    localStorage.setItem(ACCESS_CODE_KEY, code.trim());
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function clearAccessCode(): void {
+  try {
+    localStorage.removeItem(ACCESS_CODE_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export function getLocalDateKey(date: Date = new Date()): string {
   const year = date.getFullYear();

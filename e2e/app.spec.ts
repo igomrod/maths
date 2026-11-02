@@ -64,5 +64,13 @@ test.describe('Mates Mágicas - Tablet E2E Suite', () => {
     await expect(page.getByTestId('solved-counter')).toContainText('1 estrella');
     await expect(page.getByTestId('problem-status-badge')).toContainText('¡Problema Resuelto!');
     await expect(page.getByTestId('problem-history').locator('[data-testid^="locked-solved-"]')).toHaveCount(1);
+
+    // 8. Verify Family Magic Code modal saves code in localStorage
+    await page.getByTestId('open-family-code-btn').click();
+    await expect(page.getByTestId('family-code-modal')).toBeVisible();
+    await page.getByTestId('family-code-input').fill('unicornio9');
+    await page.getByTestId('save-family-code-btn').click();
+    await expect(page.getByTestId('family-code-modal')).toBeHidden();
+    await expect(page.getByTestId('open-family-code-btn')).toContainText('Clave Guardada');
   });
 });
