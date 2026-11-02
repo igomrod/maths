@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+    background-image: radial-gradient(#fde68a 1.5px, transparent 1.5px), radial-gradient(#fbcfe8 1.5px, #fffbeb 1.5px);
+    background-size: 48px 48px;
+    background-position: 0 0, 24px 24px;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Fredoka', system-ui, -apple-system, sans-serif;
+  }
+}

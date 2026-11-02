@@ -1,0 +1,50 @@
+name: Trunk CI/CD (E2E & Netlify Deploy)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build application
+        run: npm run build
+
+      - name: Run E2E tests (Playwright Tablet Suite)
+        env:
+          MOCK_LLM: 'true'
+        run: npm run test:e2e
+
+      - name: Deploy to Netlify (Production on main)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          if [ -n "$NETLIFY_AUTH_TOKEN" ] && [ -n "$NETLIFY_SITE_ID" ]; then
+            npx netlify-cli deploy --prod --dir=dist --functions=netlify/functions
+          else
+            echo "ℹ️ NETLIFY_AUTH_TOKEN or NETLIFY_SITE_ID not set in GitHub Secrets; skipping CLI deploy (or using Netlify native GitHub integration)."
+          fi
