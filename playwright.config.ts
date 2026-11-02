@@ -27,6 +27,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       MOCK_LLM: 'true',
+      OPENCODE_API_KEY: '',
+      FAMILY_ACCESS_CODE: '',
     },
   },
 });

@@ -20,6 +20,10 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 function localApiMiddleware(): Plugin {
   const loadDotEnvIntoProcess = () => {
+    if (process.env.MOCK_LLM === 'true') {
+      process.env.OPENCODE_API_KEY = '';
+      return;
+    }
     const env = loadEnv('development', process.cwd(), '');
     for (const [key, val] of Object.entries(env)) {
       if (process.env[key] === undefined) {
@@ -123,10 +127,14 @@ function localApiMiddleware(): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
-  for (const [key, val] of Object.entries(env)) {
-    if (process.env[key] === undefined) {
-      process.env[key] = val;
+  if (process.env.MOCK_LLM === 'true') {
+    process.env.OPENCODE_API_KEY = '';
+  } else {
+    const env = loadEnv(mode, process.cwd(), '');
+    for (const [key, val] of Object.entries(env)) {
+      if (process.env[key] === undefined) {
+        process.env[key] = val;
+      }
     }
   }
   return {

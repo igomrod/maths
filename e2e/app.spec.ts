@@ -65,11 +65,13 @@ test.describe('Mates Mágicas - Tablet E2E Suite', () => {
     await expect(page.getByTestId('problem-status-badge')).toContainText('¡Problema Resuelto!');
     await expect(page.getByTestId('problem-history').locator('[data-testid^="locked-solved-"]')).toHaveCount(1);
 
-    // 8. Verify /api/health diagnostic endpoint & Family Magic Code modal
+    // 8. Verify /api/health diagnostic endpoint confirms mock mode & no API key loaded
     const healthRes = await page.request.get('/api/health');
     expect(healthRes.ok()).toBeTruthy();
     const healthJson = await healthRes.json();
     expect(healthJson.status).toBe('ok');
+    expect(healthJson.environment.mockLlm).toBe(true);
+    expect(healthJson.environment.hasOpenCodeApiKey).toBe(false);
     expect(healthJson.models.generatorModel).toBeTruthy();
 
     await page.getByTestId('open-family-code-btn').click();
