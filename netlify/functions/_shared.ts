@@ -39,13 +39,12 @@ export function verifyFamilyAccessCode(providedCode?: string | null): {
   authorized: boolean;
   error?: string;
 } {
-  const expected = (process.env.FAMILY_ACCESS_CODE || '').trim();
   const isMockMode = process.env.MOCK_LLM === 'true';
-
-  // In mock/test mode without FAMILY_ACCESS_CODE configured, allow E2E tests to run seamlessly
-  if (!expected && isMockMode) {
+  if (isMockMode) {
     return { authorized: true };
   }
+
+  const expected = (process.env.FAMILY_ACCESS_CODE || '').trim();
 
   // Fail-closed in production if FAMILY_ACCESS_CODE is not set in Netlify environment variables
   if (!expected) {
@@ -93,11 +92,13 @@ export async function callOpenCodeGo(options: {
   userPrompt: string;
   apiKey: string;
 }): Promise<string> {
+  const sessionId = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   const response = await fetch(OPENCODE_GO_BASE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${options.apiKey}`,
+      'x-opencode-session': sessionId,
     },
     body: JSON.stringify({
       model: options.model.replace(/^opencode-go\//, ''),

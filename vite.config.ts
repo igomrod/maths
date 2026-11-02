@@ -1,4 +1,4 @@
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -19,11 +19,20 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 function localApiMiddleware(): Plugin {
+  const loadDotEnvIntoProcess = () => {
+    const env = loadEnv('development', process.cwd(), '');
+    for (const [key, val] of Object.entries(env)) {
+      if (process.env[key] === undefined) {
+        process.env[key] = val;
+      }
+    }
+  };
   const attachMiddleware = (middlewares: {
     use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
   }) => {
     middlewares.use(async (req, res, next) => {
       if (!req.url) return next();
+      loadDotEnvIntoProcess();
 
       if (req.url === '/api/health' || req.url === '/.netlify/functions/health') {
         const familyHeader = req.headers['x-family-code'];
@@ -113,6 +122,14 @@ function localApiMiddleware(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), localApiMiddleware()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  for (const [key, val] of Object.entries(env)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = val;
+    }
+  }
+  return {
+    plugins: [react(), tailwindcss(), localApiMiddleware()],
+  };
 });
