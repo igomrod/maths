@@ -4,6 +4,7 @@ import {
   callOpenCodeGo,
   extractJsonFromLlmText,
   getDeterministicProblem,
+  logStructured,
   OPERATION_LABELS_ES,
   verifyFamilyAccessCode,
 } from './_shared';
@@ -15,6 +16,7 @@ export interface GenerateProblemRequest {
 }
 
 export async function handleGenerateProblem(body: GenerateProblemRequest): Promise<GeneratedProblem> {
+  const startTime = Date.now();
   const operations: OperationType[] =
     Array.isArray(body.operations) && body.operations.length > 0
       ? body.operations
@@ -22,11 +24,34 @@ export async function handleGenerateProblem(body: GenerateProblemRequest): Promi
   const difficulty = body.difficulty || '4.º de Primaria (9 años)';
   const recentThemes = Array.isArray(body.recentThemes) ? body.recentThemes : [];
 
-  const apiKey = process.env.OPENCODE_API_KEY || '';
+  const apiKey = (process.env.OPENCODE_API_KEY || '').trim();
   const useMock = process.env.MOCK_LLM === 'true' || !apiKey;
 
+  logStructured({
+    functionName: 'generate-problem',
+    event: 'invoke_start',
+    details: {
+      operations,
+      difficulty,
+      recentThemesCount: recentThemes.length,
+      useMock,
+      model: promptConfig.model,
+    },
+  });
+
   if (useMock) {
-    return getDeterministicProblem(operations, recentThemes);
+    const mockProblem = getDeterministicProblem(operations, recentThemes);
+    logStructured({
+      functionName: 'generate-problem',
+      event: 'mock_problem_returned',
+      level: !apiKey && process.env.MOCK_LLM !== 'true' ? 'warn' : 'info',
+      details: {
+        reason: !apiKey ? 'missing_opencode_api_key' : 'mock_llm_enabled',
+        title: mockProblem.title,
+        durationMs: Date.now() - startTime,
+      },
+    });
+    return mockProblem;
   }
 
   const operationsLabel = operations.map((op) => OPERATION_LABELS_ES[op] || op).join(', ');
@@ -49,9 +74,29 @@ export async function handleGenerateProblem(body: GenerateProblemRequest): Promi
     if (!parsed || !parsed.title || !parsed.story || !parsed.question) {
       throw new Error('Incomplete problem JSON from LLM');
     }
+
+    logStructured({
+      functionName: 'generate-problem',
+      event: 'llm_problem_generated',
+      details: {
+        model: promptConfig.model,
+        title: parsed.title,
+        visualType: parsed.visual?.type,
+        durationMs: Date.now() - startTime,
+      },
+    });
+
     return parsed;
   } catch (err) {
-    console.warn('Falling back to deterministic problem due to LLM error:', err);
+    logStructured({
+      functionName: 'generate-problem',
+      event: 'llm_error_fallback',
+      level: 'error',
+      details: {
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - startTime,
+      },
+    });
     return getDeterministicProblem(operations, recentThemes);
   }
 }
@@ -64,12 +109,25 @@ export default async (req: Request): Promise<Response> => {
     });
   }
 
-  const authCheck = verifyFamilyAccessCode(req.headers.get('x-family-code'));
+  const providedCode = req.headers.get('x-family-code');
+  const authCheck = verifyFamilyAccessCode(providedCode);
   if (!authCheck.authorized) {
-    return new Response(JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
+    logStructured({
+      functionName: 'generate-problem',
+      event: 'unauthorized_family_code',
+      level: 'warn',
+      details: {
+        providedHeader: Boolean(providedCode),
+        reason: authCheck.error,
+      },
     });
+    return new Response(
+      JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }),
+      {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   try {
@@ -80,6 +138,14 @@ export default async (req: Request): Promise<Response> => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    logStructured({
+      functionName: 'generate-problem',
+      event: 'unhandled_exception',
+      level: 'error',
+      details: {
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }),
       {

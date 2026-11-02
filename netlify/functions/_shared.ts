@@ -2,15 +2,60 @@ import { GeneratedProblem, OperationType, ValidationResult } from '../../src/typ
 
 export const OPENCODE_GO_BASE_URL = 'https://opencode.ai/zen/go/v1/chat/completions';
 
+export interface StructuredLogEvent {
+  functionName: string;
+  event: string;
+  level?: 'info' | 'warn' | 'error';
+  details?: Record<string, unknown>;
+}
+
+export function logStructured({
+  functionName,
+  event,
+  level = 'info',
+  details = {},
+}: StructuredLogEvent): void {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    level,
+    functionName,
+    event,
+    hasOpenCodeApiKey: Boolean((process.env.OPENCODE_API_KEY || '').trim()),
+    hasFamilyAccessCode: Boolean((process.env.FAMILY_ACCESS_CODE || '').trim()),
+    mockLlm: process.env.MOCK_LLM === 'true',
+    ...details,
+  };
+  const serialized = JSON.stringify(payload);
+  if (level === 'error') {
+    console.error(serialized);
+  } else if (level === 'warn') {
+    console.warn(serialized);
+  } else {
+    console.info(serialized);
+  }
+}
+
 export function verifyFamilyAccessCode(providedCode?: string | null): {
   authorized: boolean;
   error?: string;
 } {
   const expected = (process.env.FAMILY_ACCESS_CODE || '').trim();
-  // If FAMILY_ACCESS_CODE is not set in local dev / E2E tests, allow access
-  if (!expected) {
+  const isMockMode = process.env.MOCK_LLM === 'true';
+
+  // In mock/test mode without FAMILY_ACCESS_CODE configured, allow E2E tests to run seamlessly
+  if (!expected && isMockMode) {
     return { authorized: true };
   }
+
+  // Fail-closed in production if FAMILY_ACCESS_CODE is not set in Netlify environment variables
+  if (!expected) {
+    return {
+      authorized: false,
+      error:
+        '⚠️ Configuración pendiente en Netlify: falta añadir la variable de entorno FAMILY_ACCESS_CODE.',
+    };
+  }
+
   if (!providedCode || providedCode.trim() !== expected) {
     return {
       authorized: false,

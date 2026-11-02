@@ -4,6 +4,7 @@ import {
   callOpenCodeGo,
   evaluateAnswerFallback,
   extractJsonFromLlmText,
+  logStructured,
   verifyFamilyAccessCode,
 } from './_shared';
 
@@ -15,6 +16,7 @@ export interface ValidateAnswerRequest {
 export async function handleValidateAnswer(
   body: ValidateAnswerRequest
 ): Promise<ValidationResult> {
+  const startTime = Date.now();
   const { problem, userAnswer } = body;
 
   if (!problem || typeof userAnswer !== 'string' || !userAnswer.trim()) {
@@ -26,11 +28,33 @@ export async function handleValidateAnswer(
     };
   }
 
-  const apiKey = process.env.OPENCODE_API_KEY || '';
+  const apiKey = (process.env.OPENCODE_API_KEY || '').trim();
   const useMock = process.env.MOCK_LLM === 'true' || !apiKey;
 
+  logStructured({
+    functionName: 'validate-answer',
+    event: 'invoke_start',
+    details: {
+      problemTitle: problem.title,
+      useMock,
+      model: validatorConfig.model,
+    },
+  });
+
   if (useMock) {
-    return evaluateAnswerFallback(problem, userAnswer);
+    const fallbackResult = evaluateAnswerFallback(problem, userAnswer);
+    logStructured({
+      functionName: 'validate-answer',
+      event: 'mock_validation_returned',
+      level: !apiKey && process.env.MOCK_LLM !== 'true' ? 'warn' : 'info',
+      details: {
+        reason: !apiKey ? 'missing_opencode_api_key' : 'mock_llm_enabled',
+        status: fallbackResult.status,
+        isCorrect: fallbackResult.isCorrect,
+        durationMs: Date.now() - startTime,
+      },
+    });
+    return fallbackResult;
   }
 
   const userPrompt = validatorConfig.userPromptTemplate
@@ -54,9 +78,29 @@ export async function handleValidateAnswer(
     if (typeof parsed?.isCorrect !== 'boolean' || !parsed?.feedback) {
       throw new Error('Incomplete validation JSON from LLM');
     }
+
+    logStructured({
+      functionName: 'validate-answer',
+      event: 'llm_validation_completed',
+      details: {
+        model: validatorConfig.model,
+        status: parsed.status,
+        isCorrect: parsed.isCorrect,
+        durationMs: Date.now() - startTime,
+      },
+    });
+
     return parsed;
   } catch (err) {
-    console.warn('Falling back to deterministic validator due to LLM error:', err);
+    logStructured({
+      functionName: 'validate-answer',
+      event: 'llm_error_fallback',
+      level: 'error',
+      details: {
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - startTime,
+      },
+    });
     return evaluateAnswerFallback(problem, userAnswer);
   }
 }
@@ -69,12 +113,25 @@ export default async (req: Request): Promise<Response> => {
     });
   }
 
-  const authCheck = verifyFamilyAccessCode(req.headers.get('x-family-code'));
+  const providedCode = req.headers.get('x-family-code');
+  const authCheck = verifyFamilyAccessCode(providedCode);
   if (!authCheck.authorized) {
-    return new Response(JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
+    logStructured({
+      functionName: 'validate-answer',
+      event: 'unauthorized_family_code',
+      level: 'warn',
+      details: {
+        providedHeader: Boolean(providedCode),
+        reason: authCheck.error,
+      },
     });
+    return new Response(
+      JSON.stringify({ error: authCheck.error, code: 'UNAUTHORIZED_FAMILY_CODE' }),
+      {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   try {
@@ -85,6 +142,14 @@ export default async (req: Request): Promise<Response> => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    logStructured({
+      functionName: 'validate-answer',
+      event: 'unhandled_exception',
+      level: 'error',
+      details: {
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }),
       {

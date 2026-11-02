@@ -39,9 +39,45 @@ export const App: React.FC = () => {
     }
   }, [problems, activeProblemId]);
 
-  const handleSaveFamilyCode = (newCode: string) => {
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/health', {
+      headers: {
+        'x-family-code': getSavedAccessCode(),
+      },
+    })
+      .then((res) => res.json())
+      .then((data: { authCheck?: { authorized?: boolean } }) => {
+        if (!cancelled && data?.authCheck?.authorized === false) {
+          setIsCodeModalOpen(true);
+        }
+      })
+      .catch(() => {
+        // Ignore network errors on initial check
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveFamilyCode = async (newCode: string) => {
     saveAccessCode(newCode);
     setFamilyCode(newCode);
+    try {
+      const res = await fetch('/api/health', {
+        method: 'POST',
+        headers: {
+          'x-family-code': newCode,
+        },
+      });
+      if (res.status === 401) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        setCodeErrorMessage(errData.error || 'Contraseña Mágica incorrecta.');
+        return;
+      }
+    } catch {
+      // Allow saving if offline
+    }
     setCodeErrorMessage(null);
     setIsCodeModalOpen(false);
     setErrorBanner(null);

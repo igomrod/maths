@@ -65,7 +65,13 @@ test.describe('Mates Mágicas - Tablet E2E Suite', () => {
     await expect(page.getByTestId('problem-status-badge')).toContainText('¡Problema Resuelto!');
     await expect(page.getByTestId('problem-history').locator('[data-testid^="locked-solved-"]')).toHaveCount(1);
 
-    // 8. Verify Family Magic Code modal saves code in localStorage
+    // 8. Verify /api/health diagnostic endpoint & Family Magic Code modal
+    const healthRes = await page.request.get('/api/health');
+    expect(healthRes.ok()).toBeTruthy();
+    const healthJson = await healthRes.json();
+    expect(healthJson.status).toBe('ok');
+    expect(healthJson.models.generatorModel).toBeTruthy();
+
     await page.getByTestId('open-family-code-btn').click();
     await expect(page.getByTestId('family-code-modal')).toBeVisible();
     await page.getByTestId('family-code-input').fill('unicornio9');

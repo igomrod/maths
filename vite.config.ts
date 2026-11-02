@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { handleGenerateProblem } from './netlify/functions/generate-problem';
 import { handleValidateAnswer } from './netlify/functions/validate-answer';
+import { getHealthReport } from './netlify/functions/health';
 import { verifyFamilyAccessCode } from './netlify/functions/_shared';
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -23,6 +24,25 @@ function localApiMiddleware(): Plugin {
   }) => {
     middlewares.use(async (req, res, next) => {
       if (!req.url) return next();
+
+      if (req.url === '/api/health' || req.url === '/.netlify/functions/health') {
+        const familyHeader = req.headers['x-family-code'];
+        const code = Array.isArray(familyHeader) ? familyHeader[0] : familyHeader;
+        const report = getHealthReport(code);
+        if (req.method === 'POST') {
+          const authCheck = verifyFamilyAccessCode(code);
+          if (!authCheck.authorized) {
+            res.statusCode = 401;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ...report, authorized: false, error: authCheck.error }));
+            return;
+          }
+        }
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(report, null, 2));
+        return;
+      }
 
       if (
         (req.url === '/api/generate-problem' || req.url === '/.netlify/functions/generate-problem') &&
