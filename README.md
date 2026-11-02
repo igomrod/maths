@@ -50,4 +50,5 @@ npm run test:e2e
 
 ## Despliegue continuo (Trunk-Based Development + Netlify)
 
-El flujo en `.github/workflows/ci-cd.yml` ejecuta el build y los tests E2E de Playwright en cada push a `main`, desplegando automáticamente a Netlify (configurando `NETLIFY_AUTH_TOKEN` y `NETLIFY_SITE_ID` en los secretos del repositorio de GitHub, o vinculando el repo directamente desde el panel de Netlify).
+El flujo en `.github/workflows/ci-cd.yml` ejecuta el build y los tests E2E de Playwright en cada push a `main`, desplegando automáticamente a Netlify.
+
