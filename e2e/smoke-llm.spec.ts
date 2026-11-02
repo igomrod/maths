@@ -14,19 +14,25 @@ test.describe('Mates Mágicas - Ad-Hoc Live LLM Smoke Suite', () => {
   test('authenticates with Family Passcode, generates a real LLM problem with visuals, handles a wrong attempt, and validates a natural-language correct answer', async ({
     page,
   }) => {
-    const familyCode = process.env.FAMILY_ACCESS_CODE || '';
+    const familyCode = process.env.PROD_FAMILY_ACCESS_CODE || process.env.FAMILY_ACCESS_CODE || '';
     expect(
       familyCode.length,
-      'FAMILY_ACCESS_CODE must be set in .env to run live smoke tests'
+      'FAMILY_ACCESS_CODE (or PROD_FAMILY_ACCESS_CODE) must be set to run live smoke tests'
     ).toBeGreaterThan(0);
 
     // 1. Verify /api/health confirms LIVE LLM mode (mockLlm: false, hasOpenCodeApiKey: true)
-    const healthRes = await page.request.get('/api/health');
+    const healthRes = await page.request.get('/api/health', {
+      headers: { 'x-family-code': familyCode },
+    });
     expect(healthRes.ok()).toBeTruthy();
     const healthJson = await healthRes.json();
     expect(healthJson.environment.mockLlm).toBe(false);
     expect(healthJson.environment.hasOpenCodeApiKey).toBe(true);
     expect(healthJson.environment.hasFamilyAccessCode).toBe(true);
+    expect(
+      healthJson.authCheck?.authorized,
+      'The FAMILY_ACCESS_CODE in your local .env does not match the FAMILY_ACCESS_CODE configured in Netlify production! Set PROD_FAMILY_ACCESS_CODE in .env to match Netlify.'
+    ).toBe(true);
 
     // 2. Load the app on a clean tablet session; verify the Family Code modal pops up automatically
     await page.goto('/');

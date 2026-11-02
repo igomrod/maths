@@ -9,6 +9,7 @@
     "preview": "vite preview --port 4173",
     "test:e2e": "playwright test",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
+    "test:smoke:prod": "SMOKE_BASE_URL=https://mates-magicas.netlify.app playwright test --config=playwright.smoke.config.ts",
     "prompt:tune": "tsx scripts/tune-prompt.ts"
   },
   "dependencies": {

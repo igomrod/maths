@@ -21,7 +21,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: targetUrl,
-    trace: 'retain-on-failure',
+    trace: 'off',
     viewport: { width: 1024, height: 768 },
   },
   projects: [
